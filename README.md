@@ -9,6 +9,6 @@ devtools::install_github("mikkelsoelvsten/manyRegressors")
 ```
 ### Included functions
 
-```LOFtest```, Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity.
+```LOFtest``` Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity.
 
-```LOvcov```, Variance-covariance estimator that is robust to heteroskedasticity and many regressors.
+```LOvcov``` Variance-covariance estimator that is robust to heteroskedasticity and many regressors.
