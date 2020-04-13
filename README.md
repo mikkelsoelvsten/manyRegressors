@@ -12,3 +12,7 @@ devtools::install_github("mikkelsoelvsten/manyRegressors")
 ```LOFtest``` Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity.
 
 ```LOvcov``` Variance-covariance estimator that is robust to heteroskedasticity and many regressors.
+
+### References
+
+Kline, Saggio, and Sølvsten (2019). *Leave-out estimation of variance components*. [https://arxiv.org/abs/1806.01494](https://arxiv.org/abs/1806.01494)
