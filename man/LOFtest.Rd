@@ -2,12 +2,12 @@
 % Please edit documentation in R/LOFtest.R
 \name{LOFtest}
 \alias{LOFtest}
-\title{Test a hypothesis that imposes multiple restrictions}
+\title{Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity}
 \usage{
 LOFtest(y, X, R, q, nCores = 1, size = 0.05)
 }
 \arguments{
-\item{y}{a vector containing observations on the response variable.}
+\item{y}{a vector containing observations on the outcome variable.}
 
 \item{X}{a full rank matrix of explanatory variables, arranged so that each column corresponds to a covariate and each row corresponds to an observation.}
 
@@ -27,7 +27,7 @@ and the critical value for the specificed \code{size}.
 }
 \description{
 Computes the leave-out F-test from Anatolyev and Sølvsten (2020) which performs a test of the null hypothesis \eqn{R\beta = q} in the linear regression model \eqn{y = X\beta + \epsilon}.
-The test provides an adjustment to the usual critical value used with the F-test, and this adjustment makes the test robust to many restrictions and heteroskedasticity among the error terms.
+The test provides an adjustment to the usual critical value used with the F-test, and this adjustment makes the test robust to many restrictions and heteroskedasticity in the error terms.
 The test retains asymptotic validity even when the number of regressors and restrictions are proportional to sample size.
 }
 \examples{

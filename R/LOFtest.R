@@ -1,11 +1,11 @@
-#' Test a hypothesis that imposes multiple restrictions
+#' Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity
 #'
 #' Computes the leave-out F-test from Anatolyev and Sølvsten (2020) which performs a test of the null hypothesis \eqn{R\beta = q} in the linear regression model \eqn{y = X\beta + \epsilon}.
-#' The test provides an adjustment to the usual critical value used with the F-test, and this adjustment makes the test robust to many restrictions and heteroskedasticity among the error terms.
+#' The test provides an adjustment to the usual critical value used with the F-test, and this adjustment makes the test robust to many restrictions and heteroskedasticity in the error terms.
 #' The test retains asymptotic validity even when the number of regressors and restrictions are proportional to sample size.
 ## #' For further details, see Anatolyev and Sølvsten (2020), https://arxiv.org/abs/2003.07320?context=econ.EM.
 #'
-#' @param y a vector containing observations on the response variable.
+#' @param y a vector containing observations on the outcome variable.
 #' @param X a full rank matrix of explanatory variables, arranged so that each column corresponds to a covariate and each row corresponds to an observation.
 #' @param R a matrix specifying the linearly independent restrictions on the parameters.
 #' The number of rows in \code{R} is equal to the number of restrictions and the number of columns in \code{R} is equal to the number of columns in \code{X}.
@@ -42,6 +42,22 @@
 LOFtest <- function(y,X,R,q,nCores=1,size=0.05){
   #Dimensions
   n <- dim(X)[1]; m <- dim(X)[2]; r <- dim(R)[1]
+
+  if (length(y) != n) {
+    stop("incomplete vector of responses or incomplete matrix of covariates; check
+         that the length of y matches the number of rows of X")
+  }
+
+  if (ncol(R) != m) {
+    stop("incompletely specified restriction matrix R; mismatch between the number of
+         columns of R and the number of columns of X")
+  }
+
+  if (length(q) != r) {
+    stop("mismatch between number of restrictions and the values for the restrictions
+         to take on; check that the lenght of q matches the number of rows of R")
+  }
+
   #Numerator matrices
   Sinv <- tryCatch( solve( crossprod(X) ), error = function(e) { matrix(0) } )
   if ( dim(Sinv)[1] == 1 )
