@@ -17,4 +17,4 @@ devtools::install_github("mikkelsoelvsten/manyRegressors")
 
 Kline, Saggio, and Sølvsten (2019). *Leave-out estimation of variance components*. [https://arxiv.org/abs/1806.01494](https://arxiv.org/abs/1806.01494)
 
-Anatolyev and Sølvsten (2020). *Testing Many Restrictions Under Heteroskedasticity*. [https://arxiv.org/abs/2003.07320?context=econ.EM](https://arxiv.org/abs/2003.07320?context=econ.EM)
+Anatolyev and Sølvsten (2020). *Testing Many Restrictions Under Heteroskedasticity*. [https://arxiv.org/abs/2003.07320](https://arxiv.org/abs/2003.07320)
