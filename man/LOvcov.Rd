@@ -7,10 +7,10 @@
 LOvcov(linmod, V)
 }
 \arguments{
-\item{linmod}{an object of class "lm."}
+\item{linmod}{an object of class "lm" that stems from fitting the regression model \eqn{y = X\beta + \epsilon}.}
 
 \item{V}{a matrix specifying the linearly independent restrictions on the parameters.
-The number of rows in \code{V} is equal to the number of contrasts and the number of columns in \code{V} is equal to the number of columns in \code{X}.}
+The number of rows in \code{V} is equal to the number of contrasts and the number of columns in \code{V} must be equal to the dimension of \eqn{\beta}.}
 }
 \value{
 \code{LOvcov} returns a variance-covariance matrix for the linear contrasts \eqn{V\beta}, using
@@ -23,17 +23,18 @@ provides a variance estimator which is asymptotically valid under many regressor
 unrestricted heteroskedasticity.
 }
 \examples{
-## An example of a regression with 640 observations, 512 regressors,
-## and the last three coefficients are of interest.
+## An example of a regression with 640 observations and 512 regressors
+## where the last three coefficients are of interest.
 set.seed(1)
 X <- cbind(1, (0.5+runif(640))*matrix(exp(rnorm(640*511)), 640,511))
 y <- X \%*\% c( -.5, rep(0.002,511) ) + rnorm(640)*.3*rowMeans(X)^2
 V <- cbind( matrix(0, 3, 509), diag(3))
 linmod <- lm(y ~ X-1)
-vcov <- LOvcov(linmod, V)
-coeff<- V \%*\% linmod$coefficients
 
-## Coefficients and standard errors
+vcov <- LOvcov(linmod, V)
+
+## Coefficients and standard errors of interest
+coeff <- V \%*\% linmod$coefficients
 cbind(coeff,sqrt(diag(vcov)))
 
 ## P-value for joint significance test

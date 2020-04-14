@@ -4,15 +4,13 @@
 \alias{LOFtest}
 \title{Test a hypothesis that imposes many restrictions in a linear regression with many regressors and heteroskedasticity}
 \usage{
-LOFtest(y, X, R, q, nCores = 1, size = 0.05)
+LOFtest(linmod, R, q, nCores = 1, size = 0.05)
 }
 \arguments{
-\item{y}{a vector containing observations on the outcome variable.}
-
-\item{X}{a full rank matrix of explanatory variables, arranged so that each column corresponds to a covariate and each row corresponds to an observation.}
+\item{linmod}{an object of class "lm" that stems from fitting the regression model \eqn{y = X\beta + \epsilon}.}
 
 \item{R}{a matrix specifying the linearly independent restrictions on the parameters.
-The number of rows in \code{R} is equal to the number of restrictions and the number of columns in \code{R} is equal to the number of columns in \code{X}.}
+The number of rows in \code{R} is equal to the number of restrictions and the number of columns in \code{R} must be equal to the dimension of \eqn{\beta}.}
 
 \item{q}{a vector of the hypothesized values for the linear combinations of the parameters \eqn{R\beta}.}
 
@@ -39,8 +37,9 @@ X <- cbind(1, (0.5+runif(640))*matrix(exp(rnorm(640*511)), 640,511))
 y <- X \%*\% c( -.5, rep(0.002,511) ) + rnorm(640)*.3*rowMeans(X)^2
 R <- cbind( matrix(0, 384, 128), diag(384))
 q <- rep(0.002, 384)
+linmod <- lm(y~X-1)
 
-LOFtest(y, X, R, q)
+LOFtest(linmod, R, q)
 }
 ## The null is not rejected at the 5\\% level since the value of the
 ## F statistic is below the critical value returned by LOFtest.
@@ -48,5 +47,5 @@ LOFtest(y, X, R, q)
 ## would incorrectly lead to a rejection of the null.
 }
 \references{
-Anatolyev and Sølvsten (2020). \emph{Testing Many Restrictions Under Heteroskedasticity}. \url{https://arxiv.org/abs/2003.07320?context=econ.EM}
+Anatolyev and Sølvsten (2020). \emph{Testing Many Restrictions Under Heteroskedasticity}. \url{https://arxiv.org/abs/2003.07320}
 }

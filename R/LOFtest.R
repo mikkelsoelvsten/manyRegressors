@@ -3,12 +3,11 @@
 #' Computes the leave-out F-test from Anatolyev and Sølvsten (2020) which performs a test of the null hypothesis \eqn{R\beta = q} in the linear regression model \eqn{y = X\beta + \epsilon}.
 #' The test provides an adjustment to the usual critical value used with the F-test, and this adjustment makes the test robust to many restrictions and heteroskedasticity in the error terms.
 #' The test retains asymptotic validity even when the number of regressors and restrictions are proportional to sample size.
-## #' For further details, see Anatolyev and Sølvsten (2020), https://arxiv.org/abs/2003.07320?context=econ.EM.
+## #' For further details, see Anatolyev and Sølvsten (2020), https://arxiv.org/abs/2003.07320.
 #'
-#' @param y a vector containing observations on the outcome variable.
-#' @param X a full rank matrix of explanatory variables, arranged so that each column corresponds to a covariate and each row corresponds to an observation.
+#' @param linmod an object of class "lm" that stems from fitting the regression model \eqn{y = X\beta + \epsilon}.
 #' @param R a matrix specifying the linearly independent restrictions on the parameters.
-#' The number of rows in \code{R} is equal to the number of restrictions and the number of columns in \code{R} is equal to the number of columns in \code{X}.
+#' The number of rows in \code{R} is equal to the number of restrictions and the number of columns in \code{R} must be equal to the dimension of \eqn{\beta}.
 #' @param q a vector of the hypothesized values for the linear combinations of the parameters \eqn{R\beta}.
 #' @param nCores an optional argument for users who want to use parallel processing to speed up computations.
 ## #' @param frac the fraction of observations to compute the leave-three-out estimates for. A smaller value decreases computation time but decreases the accuary of the critical value.
@@ -18,7 +17,7 @@
 #' the \code{p}-value corresponding to this realization when using the critical value function proposed in Anatolyev and Sølvsten (2020),
 #' and the critical value for the specificed \code{size}.
 #'
-#' @references Anatolyev and Sølvsten (2020). \emph{Testing Many Restrictions Under Heteroskedasticity}. \url{https://arxiv.org/abs/2003.07320?context=econ.EM}
+#' @references Anatolyev and Sølvsten (2020). \emph{Testing Many Restrictions Under Heteroskedasticity}. \url{https://arxiv.org/abs/2003.07320}
 #'
 #' @examples
 #' ## An example of a regression with 640 observations, 512 regressors,
@@ -29,8 +28,9 @@
 #' y <- X %*% c( -.5, rep(0.002,511) ) + rnorm(640)*.3*rowMeans(X)^2
 #' R <- cbind( matrix(0, 384, 128), diag(384))
 #' q <- rep(0.002, 384)
+#' linmod <- lm(y~X-1)
 #'
-#' LOFtest(y, X, R, q)
+#' LOFtest(linmod, R, q)
 #' }
 #' ## The null is not rejected at the 5\% level since the value of the
 #' ## F statistic is below the critical value returned by LOFtest.
@@ -39,59 +39,56 @@
 
 #' @export
 
-LOFtest <- function(y,X,R,q,nCores=1,size=0.05){
+LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
+
+  if (class(linmod) != "lm")
+    stop("please supply an object of class 'lm'")
+
   #Dimensions
-  n <- dim(X)[1]; m <- dim(X)[2]; r <- dim(R)[1]
+  n <- length(linmod$residuals); m <- length(linmod$coefficients); r <- nrow(R)
 
-  if (length(y) != n) {
-    stop("incomplete vector of responses or incomplete matrix of covariates; check
-         that the length of y matches the number of rows of X")
-  }
-
-  if (ncol(R) != m) {
+  if (ncol(R) != m)
     stop("incompletely specified restriction matrix R; mismatch between the number of
-         columns of R and the number of columns of X")
-  }
+         columns of R and the number of regression coefficient")
 
-  if (length(q) != r) {
+  if (length(q) != r)
     stop("mismatch between number of restrictions and the values for the restrictions
-         to take on; check that the lenght of q matches the number of rows of R")
-  }
+         to take on; check that the length of q matches the number of rows of R")
 
-  #Numerator matrices
-  Sinv <- tryCatch( solve( crossprod(X) ), error = function(e) { matrix(0) } )
-  if ( dim(Sinv)[1] == 1 )
-    stop("The supplied design matrix does not have full rank, consider dropping collinear regressors from the model and adjusting the hypothesis of interest")
-  SX <- tcrossprod( Sinv , X );  RSX <- R %*% SX
-  mid <- solve(R %*% Sinv %*% t(R))
-  #Numerator of Fisher's Fstat
-  Rhbeta <- RSX %*% y; Fnum <- as.numeric( t(Rhbeta - q) %*% mid %*% (Rhbeta - q))
-  #Residual maker matrix
-  M <- - X %*% SX; dM <- 1 + diag(M); diag(M) <- as.vector(dM)
+  #Projection matrices
+  Q <- qr.Q(linmod$qr)
+  M <- diag(n)-tcrossprod(Q); dM <- diag(M)
   if ( min(dM) < 0.001 )
     stop("The supplied design matrix loses full rank when dropping a single observation,
           this means that one (or more) coefficients are estimated based on only one observation with leverage of one.
           Consider removing observations with leverage of one and dropping from the model the corresponding parameters
           that are estimated solely from these observations")
-  #Residuals
-  y_ <- y-mean(y);  e <- as.vector(M %*% y);  e1 <- e/dM
-  #Leave-one-out conditional variance estimator
-  hs1 <- e1*y_
+  inv <- backsolve(qr.R(linmod$qr),t(R), transpose = TRUE)
+  qr.inv <- qr(inv)
+  B <- tcrossprod( Q %*% qr.Q(qr.inv)); dB <- diag(B)
+
+  #Numerator of F-statistic
+  Fnum <- sum( backsolve( qr.R(qr.inv), R %*% linmod$coefficients - q, transpose = TRUE )^2 )
+  #Residuals and leave-one-out variance estimator
+  y <- linmod$fitted.values + linmod$residuals; y_ <- y-mean(y)
+  e <- linmod$residuals;  hs1 <- e*y_/dM
+  #Numerator of centered statistic
+  LOFnum <- Fnum - sum(dB*hs1)
+
   #Variance estimator matrices
-  B <- t(RSX) %*% mid %*% RSX;  dB <- diag(B)
-  MdBdM <- M * as.vector(dB/dM)
+  MdBdM <- M * dB/dM
   V <- -2*Matrix::skewpart(MdBdM)
   UV <- 2*( B - Matrix::symmpart(MdBdM) )^2 - V^2
   Vy <- V %*% y_
-  #Numerator of Leave-out test
-  LOFnum <- as.numeric( Fnum - crossprod(dB,hs1) )
   #Biased variance estimator
   Var <- as.numeric( crossprod(hs1,UV %*% hs1) + sum( Vy^2 * hs1 ) )
-  #clean-up before computing unbiased variance estimator for Leave-out test
-  rm(Sinv,SX,RSX,mid,B,dB,MdBdM,e1,Rhbeta)
-  #Randomized approximation of leave-three-out variance estimator used to bias correct Var from above
-  #Randomly chosen elements to compute:
+
+  #clean-up before computing unbiased variance estimator for leave-out F-test
+  rm(Q,inv,qr.inv,B,dB,MdBdM)
+
+  #frac<1 provides a randomized approximation of the leave-three-out variance estimator
   frac <- 1
+  #Randomly chosen elements to compute:
   Q <- Matrix::Matrix(FALSE, nrow = n, ncol = n)
   Q[upper.tri(Q, diag = FALSE)] <- (stats::rbinom(n*(n-1)/2, 1, frac) >= 1)
   #Threshold for treating D2 and D3 as zero
@@ -106,18 +103,18 @@ LOFtest <- function(y,X,R,q,nCores=1,size=0.05){
       #Vectors to collect results in
       sp <- 0; seciBias <- rep(0,length(ji)); secjBias <- rep(0,length(ji)); loc <- 1
       #Extract relevant numbers and vectors for i - may be approximated using JLA
-      Mi <- M[,i]; Mii <- Mi[i]; MiSq <- Mi^2;
-      D2i <- Mii * dM - MiSq # D2[,i];
-      e2i <- (dM * e[i] - Mi * e)/D2i; e2i[D2i < eps^2] <- 0 # e2[i,]
-      e2ki <- (Mii * e - Mi * e[i])/D2i; e2ki[D2i < eps^2] <- 0  # e2[,i]
+      Mi <- M[,i]; Mii <- Mi[i]; MiSq <- Mi^2
+      D2i <- Mii * dM - MiSq
+      e2i <- (dM * e[i] - Mi * e)/D2i; e2i[D2i < eps^2] <- 0
+      e2ki <- (Mii * e - Mi * e[i])/D2i; e2ki[D2i < eps^2] <- 0
       Vyi <- V[,i] * y_; yi <- y_[i]
 
       for( j in ji){
         #Extract relevant numbers and vectors for j - may be approximated using JLA
         Mj <- M[,j]; Mjj <- Mj[j]; MjSq <- Mj^2;
         D2j <- Mjj * dM - MjSq #D2[,j];
-        e2j <- (dM * e[j] - Mj * e)/D2j; e2j[D2j < eps^2] <- 0 # e2[j,]
-        e2kj <- (Mjj * e - Mj * e[j])/D2j; e2kj[D2j < eps^2] <- 0  # e2[,j]
+        e2j <- (dM * e[j] - Mj * e)/D2j; e2j[D2j < eps^2] <- 0
+        e2kj <- (Mjj * e - Mj * e[j])/D2j; e2kj[D2j < eps^2] <- 0
         Vyj <- V[,j] * y_; yj <- y_[j]
         #Extract relevant joint numbers - may be approximated using JLA
         UVij <- UV[i,j]
