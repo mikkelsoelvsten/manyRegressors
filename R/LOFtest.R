@@ -39,7 +39,7 @@
 
 #' @export
 
-LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
+LOFtest <- function( linmod, R, q, nCores = 1, size = 0.05 ){
 
   if (class(linmod) != "lm")
     stop("please supply an object of class 'lm'")
@@ -65,15 +65,19 @@ LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
           that are estimated solely from these observations")
   inv <- backsolve(qr.R(linmod$qr),t(R), transpose = TRUE)
   qr.inv <- qr(inv)
-  B <- tcrossprod( Q %*% qr.Q(qr.inv)); dB <- diag(B)
+  bread <- Q %*% qr.Q(qr.inv)
+  B <- tcrossprod( bread ); dB <- diag(B)
 
   #Numerator of F-statistic
   Fnum <- sum( backsolve( qr.R(qr.inv), R %*% linmod$coefficients - q, transpose = TRUE )^2 )
   #Residuals and leave-one-out variance estimator
   y <- linmod$fitted.values + linmod$residuals; y_ <- y-mean(y)
   e <- linmod$residuals;  hs1 <- e*y_/dM
-  #Numerator of centered statistic
-  LOFnum <- Fnum - sum(dB*hs1)
+  #Estimated mean for numerator of F-statistic
+  hE <- sum(dB*hs1)
+
+  #Unbiased variance-covariance matrix for rotated linear combinations
+  Omega = crossprod(bread, bread * hs1)
 
   #Variance estimator matrices
   MdBdM <- M * dB/dM
@@ -84,21 +88,26 @@ LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
   Var <- as.numeric( crossprod(hs1,UV %*% hs1) + sum( Vy^2 * hs1 ) )
 
   #clean-up before computing unbiased variance estimator for leave-out F-test
-  rm(Q,inv,qr.inv,B,dB,MdBdM)
+  rm(qr.inv,bread,B,dB,MdBdM)
 
-  #frac<1 provides a randomized approximation of the leave-three-out variance estimator
+  #frac < 1 provides a randomized approximation of the leave-three-out variance estimator
   frac <- 1
   #Randomly chosen elements to compute:
-  Q <- Matrix::Matrix(FALSE, nrow = n, ncol = n)
-  Q[upper.tri(Q, diag = FALSE)] <- (stats::rbinom(n*(n-1)/2, 1, frac) >= 1)
+  Sel <- Matrix::Matrix(FALSE, nrow = n, ncol = n)
+  Sel[upper.tri(Sel, diag = FALSE)] <- (stats::rbinom(n*(n-1)/2, 1, frac) >= 1)
+  #Compute only important elements
+  # sUV = rowSums(UV^2)
+  # sV = rowSums(V^2)
+  # Q = Q & ( (UV^2 > outer(sUV,sUV,FUN=function(x,y) x+y)/2/sqrt(n)) | (V^2 > outer(sV,sV,FUN=function(x,y) x+y)/2/sqrt(n) ) )
+
   #Threshold for treating D2 and D3 as zero
   eps <- 0.01
 
   `%mode%` <- foreach::`%do%`; i<-1
   if(nCores>1){cl <- parallel::makeCluster(nCores); doParallel::registerDoParallel(cl); `%mode%` <- foreach::`%dopar%`}
   Sp <- foreach::foreach(i=1:n, .combine=rbind, .packages = c("Matrix")) %mode% {
-    #Loop over the randomly choosen pairs. Calculate relevant variance terms for both i and j.
-    ji <- (1:n)[Q[i,]]
+    #Loop over the choosen pairs. Calculate relevant variance terms for both i and j.
+    ji <- (1:n)[Sel[i,]]
     if( length(ji)>0 ){
       #Vectors to collect results in
       sp <- 0; seciBias <- rep(0,length(ji)); secjBias <- rep(0,length(ji)); loc <- 1
@@ -140,9 +149,9 @@ LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
           sp <- sp + 2 * UVij * ( yi * yj / D2i[j] * sum( (Mjj*Mi - Mi[j]*Mj) * y_ * e3j ) - hs1[i] * hs1[j])
         } else if ( D2i[j] > eps^2 ){
           #Upward biased estimator when the same leave-three-out failure is due to i and j
-          sp <- sp + 2 * UVij * (UVij >0)* ( .5 * yi^2 * yj * e2j[i] + .5 * yj^2 * yi * e2i[j] ) - UVij * hs1[i] * hs1[j]
+          sp <- sp + 2 * UVij * ( (UVij >0)* ( .5 * yi^2 * yj * e2j[i] + .5 * yj^2 * yi * e2i[j] ) - hs1[i] * hs1[j])
         } else {
-          sp <- sp + 2 * UVij * (UVij >0)* yi^2 * yj^2 - UVij * hs1[i] * hs1[j]
+          sp <- sp + 2 * UVij * ( (UVij >0)* yi^2 * yj^2 - hs1[i] * hs1[j])
         }
         loc <- loc +1
       }
@@ -159,15 +168,18 @@ LOFtest <- function(linmod,R,q,nCores=1,size=0.05){
   #and a guaranteed positive and upward biased alternative otherwise
   if(LOFVar <= 0){    LOFVar <- sum( UV * (UV >= 0) * tcrossprod(y_^2) ) + sum( Vy^2 * y_^2  )  }
 
+
+  #Dimension robust inference
+  hatw <- pmax( eigen( Omega, only.values = TRUE)$values, 0 )
+  hatw <- hatw / sum( hatw )
+  barF <- replicate( 49999, crossprod( stats::rchisq(r,1), hatw) / stats::rchisq(1,n-m)*(n-m) )
+
+
   #Where to store results
   res <- list(Fstat=numeric(), pval=numeric(), critval=numeric() )
   res$Fstat <- Fnum/r/sum(e^2)*(n-m)
-  if( n-m <= 400000 ){
-    res$pval <- 1 - stats::pf(LOFnum/sqrt(LOFVar) * sqrt(2/r+2/(n-m)) + 1, r, n-m )
-    res$critval <- (Fnum-LOFnum + sqrt(LOFVar)*(stats::qf(1-size,r,n-m)-1)/sqrt(2/r+2/(n-m)))/r/sum(e^2)*(n-m)
-  }else{
-    res$pval <- 1 - stats::pf(LOFnum/sqrt(LOFVar) * sqrt(2/r) + 1, r, n-m )
-    res$critval <- (Fnum-LOFnum + sqrt(LOFVar)*(stats::qf(1-size,r,n-m)-1)/sqrt(2/r))/r/sum(e^2)*(n-m)
-  }
+  res$pval <- mean( (hE + sqrt(LOFVar)*( barF - 1 )/sqrt( 2*sum(hatw^2) + 2/(n-m) ) )/r/sum(e^2)*(n-m) >= res$Fstat )
+  res$critval <- (hE + sqrt(LOFVar)*( stats::quantile(barF,1-size) - 1)/sqrt( 2*sum(hatw^2) + 2/(n-m) ) )/r/sum(e^2)*(n-m)
+
   res
 }
